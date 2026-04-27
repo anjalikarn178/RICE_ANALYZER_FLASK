@@ -4,7 +4,7 @@ Runs in a background thread; call enqueue(crop_bgr, area) from any thread.
 """
 
 import os
-import time
+import queue
 import threading
 import cv2
 import numpy as np
@@ -13,7 +13,6 @@ import torch.nn as nn
 from PIL import Image
 from torchvision import models, transforms
 from torchvision.models import EfficientNet_B0_Weights
-from collections import deque
 
 from constants import MODEL_PATH, CLASSES, BROKEN_AREA_THRESHOLD
 import data_io
@@ -50,8 +49,7 @@ class AIClassifier:
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._model  = self._load_model()
         self._softmax = nn.Softmax(dim=1)
-        self._queue  = deque()
-        self._lock   = threading.Lock()
+        self._queue  = queue.Queue()
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -84,20 +82,16 @@ class AIClassifier:
 
     def _loop(self):
         while self._running:
-            item = None
-            with self._lock:
-                if self._queue:
-                    item = self._queue.popleft()
-            if item is not None:
-                crop, area = item
+            try:
+                crop, area = self._queue.get(timeout=0.1)
                 category = self._classify(crop, area)
                 data_io.update_category(category)
-            else:
-                time.sleep(0.01)
+                self._queue.task_done()
+            except queue.Empty:
+                continue
 
     def enqueue(self, crop_bgr: np.ndarray, area: float):
-        with self._lock:
-            self._queue.append((crop_bgr, area))
+        self._queue.put((crop_bgr, area))
 
     def stop(self):
         self._running = False

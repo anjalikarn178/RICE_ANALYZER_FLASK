@@ -1,13 +1,38 @@
 import time
+import queue
+import threading
 import cv2
 
 from constants import *
 from utils import read_config_flag
 from network import ping_pi
 from stream import connect_stream, cleanup_stream
-from processor import process
+from processor import process, reset
 
 
+# ── Frame queue (main thread → processor thread) ──────────────────────────────
+_frame_queue = queue.Queue()
+
+
+def _processor_loop():
+    """Consume frames from the frame queue and run grain detection + tracking."""
+    while True:
+        frame = _frame_queue.get()
+        if frame is None:   # sentinel: shut down
+            break
+        try:
+            process(frame)
+        except Exception as e:
+            print(f"[PROCESSOR] Error: {e}")
+        finally:
+            _frame_queue.task_done()
+
+
+_proc_thread = threading.Thread(target=_processor_loop, daemon=True, name="processor")
+_proc_thread.start()
+
+
+# ── Main loop (stream reading + display) ──────────────────────────────────────
 cap = None
 window_created = False
 frame_count = 0
@@ -25,6 +50,7 @@ try:
             if cap is not None or window_created:
                 print("[INFO] CAMERA_RUN = FALSE, disconnecting stream...")
                 cap, window_created = cleanup_stream(cap, window_created)
+                reset()
 
             frame_count = 0
             start_time = None
@@ -38,6 +64,7 @@ try:
             if cap is not None or window_created:
                 print("[WARN] Pi not reachable. Stopping stream and waiting...")
                 cap, window_created = cleanup_stream(cap, window_created)
+                reset()
 
             frame_count = 0
             start_time = None
@@ -88,8 +115,13 @@ try:
         avg_fps = frame_count / elapsed if elapsed > 0 else 0
         drop_pct = max(0, (EXPECTED_FPS - avg_fps) / EXPECTED_FPS) * 100
 
+        # Push frame into queue for the processor thread.
+        # put_nowait drops the frame if the queue is full — display stays smooth.
         if process_flag:
-            process(frame)
+            try:
+                _frame_queue.put_nowait(frame)
+            except queue.Full:
+                pass  # processor busy; skip this frame
 
         cv2.imshow("Stream", frame)
 
@@ -103,5 +135,8 @@ except KeyboardInterrupt:
     print("\n[INFO] Interrupted by user.")
 
 finally:
+    # Send sentinel to stop the processor thread cleanly
+    _frame_queue.put(None)
+    _proc_thread.join(timeout=2)
     cap, window_created = cleanup_stream(cap, window_created)
     print("[INFO] Clean shutdown.")
