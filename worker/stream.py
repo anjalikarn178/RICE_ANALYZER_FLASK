@@ -9,13 +9,7 @@ def connect_stream():
     return cap
 
 
-def cleanup_stream(cap, window_created):
+def release_stream(cap):
     if cap is not None:
         cap.release()
-        cap = None
-
-    if window_created:
-        cv2.destroyAllWindows()
-        window_created = False
-
-    return cap, window_created
+    return None
