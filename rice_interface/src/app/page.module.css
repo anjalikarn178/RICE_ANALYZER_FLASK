@@ -33,6 +33,52 @@
     -14px -14px 36px rgba(255, 255, 255, 0.65);
 }
 
+.completionPopup {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 10;
+  width: min(360px, calc(100vw - 28px));
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(28, 117, 85, 0.34);
+  background: linear-gradient(150deg, #eef9f3, #dceee3);
+  box-shadow: 0 14px 26px rgba(74, 124, 101, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.completionPopupTitle {
+  margin: 0;
+  color: #24543f;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.completionPopupText {
+  margin: 0;
+  color: #3a5f50;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.completionCloseButton {
+  align-self: flex-start;
+  border: none;
+  border-radius: 10px;
+  min-height: 36px;
+  padding: 8px 14px;
+  background: #2d7f60;
+  color: #f2fff9;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.completionCloseButton:hover {
+  filter: brightness(1.05);
+}
+
 .header {
   display: flex;
   flex-direction: column;
@@ -110,6 +156,23 @@
 .statusText {
   font-weight: 700;
   color: var(--clay-text);
+}
+
+.classificationProgress {
+  color: var(--clay-subtext);
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.classificationDone {
+  width: fit-content;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(46, 139, 100, 0.16);
+  color: #1f5d45;
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 .piStatusText {
@@ -275,6 +338,11 @@
 @media (max-width: 560px) {
   .counterGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .completionPopup {
+    top: 12px;
+    right: 14px;
   }
 
   .button {
