@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 
-type CounterKey = "count" | "chalky" | "yellow" | "white" | "brown" | "broken" | "others";
+type CounterKey =
+  | "count"
+  | "chalky"
+  | "yellow"
+  | "white"
+  | "brown"
+  | "broken"
+  | "others";
 
 type CounterData = Record<CounterKey, number>;
 
 const counterCards: Array<{ label: string; key: CounterKey }> = [
-  { label: "Count", key: "count" }, // Total will be calculated as the sum of all types
+  { label: "Count", key: "count" },
   { label: "Chalky Rice", key: "chalky" },
   { label: "Yellow Rice", key: "yellow" },
   { label: "White Rice", key: "white" },
@@ -26,6 +33,10 @@ export default function Home() {
   const [cameraControlError, setCameraControlError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [showFinished, setShowFinished] = useState(false);
+  const [queueTrueStreak, setQueueTrueStreak] = useState(0);
+
+  const [finishedToastVisible, setFinishedToastVisible] = useState(false);
+
   const [counterData, setCounterData] = useState<CounterData>({
     count: 0,
     chalky: 0,
@@ -62,8 +73,23 @@ export default function Home() {
       }
 
       const data = await res.json();
-      setShowFinished(Boolean(data.queueEmpty));
+      const isQueueEmpty = Boolean(data.queueEmpty);
+
+      setQueueTrueStreak((prev) => {
+        const nextStreak = isQueueEmpty ? prev + 1 : 0;
+        const nextShowFinished = nextStreak >= 3;
+
+        setShowFinished((prevShowFinished) => {
+          if (!prevShowFinished && nextShowFinished) {
+            setFinishedToastVisible(true);
+          }
+          return nextShowFinished;
+        });
+
+        return nextShowFinished ? 3 : nextStreak;
+      });
     } catch {
+      setQueueTrueStreak(0);
       setShowFinished(false);
     }
   }, []);
@@ -111,6 +137,7 @@ export default function Home() {
     checkPiConnection();
     fetchCameraState();
     fetchQueueState();
+
     const interval = setInterval(() => {
       checkPiConnection();
       fetchQueueState();
@@ -248,14 +275,15 @@ export default function Home() {
 
   const isStartDisabled =
     !isPiConnected || isUpdatingCamera || isSavingOutput || isCameraRunning;
+
   const isStopDisabled =
     !isPiConnected || isUpdatingCamera || isSavingOutput || !isCameraRunning;
+
   const isResetDisabled = isUpdatingCamera || isSavingOutput || isCameraRunning;
   const isSaveDisabled = isUpdatingCamera || isSavingOutput;
 
   return (
     <div className={styles.page}>
-
       <main className={styles.main}>
         <header className={styles.header}>
           <p className={styles.kicker}>Rice Interface</p>
@@ -276,6 +304,16 @@ export default function Home() {
                 : isPiConnected
                 ? "Raspberry Pi is connected"
                 : "Raspberry Pi is disconnected"}
+            </p>
+          </div>
+          <div className={styles.statusRow}>
+            <span
+              className={`${styles.statusDot} ${
+                showFinished ? styles.stopped : styles.running
+              }`}
+            />
+            <p className={styles.statusText}>
+              {showFinished ? "Not Processing" : "Processing"}
             </p>
           </div>
 
@@ -317,7 +355,9 @@ export default function Home() {
             <p className={styles.connectionWarning}>{cameraControlError}</p>
           )}
 
-          {saveMessage && <p className={styles.connectionWarning}>{saveMessage}</p>}
+          {saveMessage && (
+            <p className={styles.connectionWarning}>{saveMessage}</p>
+          )}
 
           {!isChecking && !isPiConnected && (
             <p className={styles.connectionWarning}>
@@ -335,6 +375,22 @@ export default function Home() {
           ))}
         </section>
       </main>
+
+      {finishedToastVisible && (
+        <div className={styles.toastContainer}>
+          <div className={styles.toastSuccess}>
+            <span className={styles.toastMessage}>Processing done</span>
+            <button
+              type="button"
+              className={styles.toastCloseButton}
+              onClick={() => setFinishedToastVisible(false)}
+              aria-label="Close notification"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

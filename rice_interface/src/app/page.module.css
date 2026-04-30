@@ -286,3 +286,43 @@
     font-size: 0.9rem;
   }
 }
+
+.toastContainer {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+}
+
+.toastSuccess {
+  min-width: 240px;
+  max-width: 360px;
+  background: #16a34a;
+  color: white;
+  padding: 14px 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.toastMessage {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.toastCloseButton {
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toastCloseButton:hover {
+  opacity: 0.85;
+}
