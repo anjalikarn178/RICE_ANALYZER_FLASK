@@ -25,6 +25,7 @@ export default function Home() {
   const [isSavingOutput, setIsSavingOutput] = useState(false);
   const [cameraControlError, setCameraControlError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [showFinished, setShowFinished] = useState(false);
   const [counterData, setCounterData] = useState<CounterData>({
     count: 0,
     chalky: 0,
@@ -49,6 +50,21 @@ export default function Home() {
       setIsPiConnected(false);
     } finally {
       setIsChecking(false);
+    }
+  }, []);
+
+  const fetchQueueState = useCallback(async () => {
+    try {
+      const res = await fetch("/api/count-completed", { cache: "no-store" });
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch queue state");
+      }
+
+      const data = await res.json();
+      setShowFinished(Boolean(data.queueEmpty));
+    } catch {
+      setShowFinished(false);
     }
   }, []);
 
@@ -94,13 +110,14 @@ export default function Home() {
   useEffect(() => {
     checkPiConnection();
     fetchCameraState();
-
+    fetchQueueState();
     const interval = setInterval(() => {
       checkPiConnection();
+      fetchQueueState();
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [checkPiConnection, fetchCameraState]);
+  }, [checkPiConnection, fetchCameraState, fetchQueueState]);
 
   useEffect(() => {
     if (!isCameraRunning) return;
