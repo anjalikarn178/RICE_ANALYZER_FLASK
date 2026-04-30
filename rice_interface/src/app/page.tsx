@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 
-type CounterKey = "count" | "chalky" | "black" | "white" | "brown" | "broken" | "others";
+type CounterKey = "count" | "chalky" | "yellow" | "white" | "brown" | "broken" | "others";
 
 type CounterData = Record<CounterKey, number>;
 
 const counterCards: Array<{ label: string; key: CounterKey }> = [
   { label: "Count", key: "count" }, // Total will be calculated as the sum of all types
   { label: "Chalky Rice", key: "chalky" },
-  { label: "Black Rice", key: "black" },
+  { label: "Yellow Rice", key: "yellow" },
   { label: "White Rice", key: "white" },
   { label: "Brown Rice", key: "brown" },
   { label: "Broken Rice", key: "broken" },
@@ -23,17 +23,29 @@ export default function Home() {
   const [isCameraRunning, setIsCameraRunning] = useState(false);
   const [isUpdatingCamera, setIsUpdatingCamera] = useState(false);
   const [isSavingOutput, setIsSavingOutput] = useState(false);
+  const [isCompletionPopupVisible, setIsCompletionPopupVisible] = useState(false);
+  const [hasDismissedCompletionPopup, setHasDismissedCompletionPopup] = useState(false);
   const [cameraControlError, setCameraControlError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [counterData, setCounterData] = useState<CounterData>({
     count: 0,
     chalky: 0,
-    black: 0,
+    yellow: 0,
     white: 0,
     brown: 0,
     broken: 0,
     others: 0,
   });
+
+  const classifiedRiceCount =
+    counterData.chalky +
+    counterData.yellow +
+    counterData.white +
+    counterData.brown +
+    counterData.broken +
+    counterData.others;
+  const isClassificationDone =
+    counterData.count > 0 && classifiedRiceCount === counterData.count;
 
   const checkPiConnection = useCallback(async () => {
     try {
@@ -80,7 +92,7 @@ export default function Home() {
       setCounterData({
         count: Number(data.count) || 0,
         chalky: Number(data.chalky) || 0,
-        black: Number(data.black) || 0,
+        yellow: Number(data.yellow) || 0,
         white: Number(data.white) || 0,
         brown: Number(data.brown) || 0,
         broken: Number(data.broken) || 0,
@@ -113,6 +125,18 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [isCameraRunning, fetchCounterData]);
+
+  useEffect(() => {
+    if (isClassificationDone) {
+      if (!hasDismissedCompletionPopup) {
+        setIsCompletionPopupVisible(true);
+      }
+      return;
+    }
+
+    setIsCompletionPopupVisible(false);
+    setHasDismissedCompletionPopup(false);
+  }, [isClassificationDone, hasDismissedCompletionPopup]);
 
   const setCameraRunState = async (cameraRun: boolean) => {
     setIsUpdatingCamera(true);
@@ -166,7 +190,7 @@ export default function Home() {
       setCounterData({
         count: Number(data.count) || 0,
         chalky: Number(data.chalky) || 0,
-        black: Number(data.black) || 0,
+        yellow: Number(data.yellow) || 0,
         white: Number(data.white) || 0,
         brown: Number(data.brown) || 0,
         broken: Number(data.broken) || 0,
@@ -238,6 +262,24 @@ export default function Home() {
 
   return (
     <div className={styles.page}>
+      {isCompletionPopupVisible && (
+        <aside className={styles.completionPopup} role="status" aria-live="polite">
+          <p className={styles.completionPopupTitle}>Classification Done</p>
+          <p className={styles.completionPopupText}>
+            The count of all rice types now matches the total rice count.
+          </p>
+          <button
+            className={styles.completionCloseButton}
+            onClick={() => {
+              setIsCompletionPopupVisible(false);
+              setHasDismissedCompletionPopup(true);
+            }}
+          >
+            Close
+          </button>
+        </aside>
+      )}
+
       <main className={styles.main}>
         <header className={styles.header}>
           <p className={styles.kicker}>Rice Interface</p>
@@ -260,6 +302,14 @@ export default function Home() {
                 : "Raspberry Pi is disconnected"}
             </p>
           </div>
+
+          <p className={styles.classificationProgress}>
+            Classified: {classifiedRiceCount} / {counterData.count}
+          </p>
+
+          {isClassificationDone && (
+            <p className={styles.classificationDone}>Classification is done.</p>
+          )}
 
           <div className={styles.actionRow}>
             <button

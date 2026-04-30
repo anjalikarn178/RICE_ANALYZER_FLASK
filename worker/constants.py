@@ -1,7 +1,5 @@
 import os
 
-os.environ["QT_QPA_PLATFORM"] = "xcb"
-
 PI_IP = "192.168.50.1"
 PORT = 8000
 EXPECTED_FPS = 60
@@ -16,4 +14,9 @@ CHECK_INTERVAL = 0.5
 
 URL = f"tcp://{PI_IP}:{PORT}"
 
-CATEGORIES = ["white", "chalky", "broken", "brown", "black", "others"]
+CATEGORIES = ["white", "chalky", "broken", "brown", "yellow", "others"]
+
+# Model
+MODEL_PATH = os.path.join(PARENT_DIR, "rice_model.pth")
+CLASSES = ["brown", "chalky", "white", "yellow"]   # must match training order
+BROKEN_AREA_THRESHOLD = 300                         # px² — grains below this are broken

@@ -14,7 +14,7 @@ type CounterData = {
   chalky: number;
   broken: number;
   brown: number;
-  black: number;
+  yellow: number;
   others: number;
 };
 
@@ -24,7 +24,7 @@ const emptyCounterData: CounterData = {
   chalky: 0,
   broken: 0,
   brown: 0,
-  black: 0,
+  yellow: 0,
   others: 0,
 };
 
