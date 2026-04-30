@@ -87,11 +87,13 @@ class AIClassifier:
                 category = self._classify(crop, area)
                 data_io.update_category(category)
                 self._queue.task_done()
+                data_io.update_queue_empty(self._queue.empty())
             except queue.Empty:
-                continue
-
+                pass
     def enqueue(self, crop_bgr: np.ndarray, area: float):
         self._queue.put((crop_bgr, area))
+        data_io.update_queue_empty(False)
+
 
     def stop(self):
         self._running = False

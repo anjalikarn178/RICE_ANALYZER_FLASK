@@ -6,7 +6,7 @@ so all access goes through a single lock.
 
 import json
 import threading
-from constants import DATA_FILE, CATEGORIES
+from constants import DATA_FILE, CATEGORIES, QUEUE_FILE
 
 _lock = threading.Lock()
 
@@ -49,3 +49,15 @@ def reset():
                 json.dump(data, f, indent=4)
         except Exception as e:
             print(f"[ERROR] Reset failed: {e}")
+
+def update_queue_empty(is_empty: bool):
+    """Update the QUEUE_EMPTY status in cam.json."""
+    with _lock:
+        try:
+            with open(QUEUE_FILE, "r") as f:
+                data = json.load(f)
+            data["QUEUE_EMPTY"] = is_empty
+            with open(QUEUE_FILE, "w") as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            print(f"[ERROR] Queue status update failed: {e}")

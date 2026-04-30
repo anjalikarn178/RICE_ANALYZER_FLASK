@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 
-type CounterKey = "count" | "chalky" | "yellow" | "white" | "brown" | "broken" | "others";
+type CounterKey =
+  | "count"
+  | "chalky"
+  | "yellow"
+  | "white"
+  | "brown"
+  | "broken"
+  | "others";
 
 type CounterData = Record<CounterKey, number>;
 
 const counterCards: Array<{ label: string; key: CounterKey }> = [
-  { label: "Count", key: "count" }, // Total will be calculated as the sum of all types
+  { label: "Count", key: "count" },
   { label: "Chalky Rice", key: "chalky" },
   { label: "Yellow Rice", key: "yellow" },
   { label: "White Rice", key: "white" },
@@ -23,10 +30,13 @@ export default function Home() {
   const [isCameraRunning, setIsCameraRunning] = useState(false);
   const [isUpdatingCamera, setIsUpdatingCamera] = useState(false);
   const [isSavingOutput, setIsSavingOutput] = useState(false);
-  const [isCompletionPopupVisible, setIsCompletionPopupVisible] = useState(false);
-  const [hasDismissedCompletionPopup, setHasDismissedCompletionPopup] = useState(false);
   const [cameraControlError, setCameraControlError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [showFinished, setShowFinished] = useState(false);
+  const [queueTrueStreak, setQueueTrueStreak] = useState(0);
+
+  const [finishedToastVisible, setFinishedToastVisible] = useState(false);
+
   const [counterData, setCounterData] = useState<CounterData>({
     count: 0,
     chalky: 0,
@@ -36,16 +46,6 @@ export default function Home() {
     broken: 0,
     others: 0,
   });
-
-  const classifiedRiceCount =
-    counterData.chalky +
-    counterData.yellow +
-    counterData.white +
-    counterData.brown +
-    counterData.broken +
-    counterData.others;
-  const isClassificationDone =
-    counterData.count > 0 && classifiedRiceCount === counterData.count;
 
   const checkPiConnection = useCallback(async () => {
     try {
@@ -61,6 +61,36 @@ export default function Home() {
       setIsPiConnected(false);
     } finally {
       setIsChecking(false);
+    }
+  }, []);
+
+  const fetchQueueState = useCallback(async () => {
+    try {
+      const res = await fetch("/api/count-completed", { cache: "no-store" });
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch queue state");
+      }
+
+      const data = await res.json();
+      const isQueueEmpty = Boolean(data.queueEmpty);
+
+      setQueueTrueStreak((prev) => {
+        const nextStreak = isQueueEmpty ? prev + 1 : 0;
+        const nextShowFinished = nextStreak >= 3;
+
+        setShowFinished((prevShowFinished) => {
+          if (!prevShowFinished && nextShowFinished) {
+            setFinishedToastVisible(true);
+          }
+          return nextShowFinished;
+        });
+
+        return nextShowFinished ? 3 : nextStreak;
+      });
+    } catch {
+      setQueueTrueStreak(0);
+      setShowFinished(false);
     }
   }, []);
 
@@ -106,13 +136,15 @@ export default function Home() {
   useEffect(() => {
     checkPiConnection();
     fetchCameraState();
+    fetchQueueState();
 
     const interval = setInterval(() => {
       checkPiConnection();
+      fetchQueueState();
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [checkPiConnection, fetchCameraState]);
+  }, [checkPiConnection, fetchCameraState, fetchQueueState]);
 
   useEffect(() => {
     if (!isCameraRunning) return;
@@ -125,18 +157,6 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [isCameraRunning, fetchCounterData]);
-
-  useEffect(() => {
-    if (isClassificationDone) {
-      if (!hasDismissedCompletionPopup) {
-        setIsCompletionPopupVisible(true);
-      }
-      return;
-    }
-
-    setIsCompletionPopupVisible(false);
-    setHasDismissedCompletionPopup(false);
-  }, [isClassificationDone, hasDismissedCompletionPopup]);
 
   const setCameraRunState = async (cameraRun: boolean) => {
     setIsUpdatingCamera(true);
@@ -255,31 +275,15 @@ export default function Home() {
 
   const isStartDisabled =
     !isPiConnected || isUpdatingCamera || isSavingOutput || isCameraRunning;
+
   const isStopDisabled =
     !isPiConnected || isUpdatingCamera || isSavingOutput || !isCameraRunning;
+
   const isResetDisabled = isUpdatingCamera || isSavingOutput || isCameraRunning;
   const isSaveDisabled = isUpdatingCamera || isSavingOutput;
 
   return (
     <div className={styles.page}>
-      {isCompletionPopupVisible && (
-        <aside className={styles.completionPopup} role="status" aria-live="polite">
-          <p className={styles.completionPopupTitle}>Classification Done</p>
-          <p className={styles.completionPopupText}>
-            The count of all rice types now matches the total rice count.
-          </p>
-          <button
-            className={styles.completionCloseButton}
-            onClick={() => {
-              setIsCompletionPopupVisible(false);
-              setHasDismissedCompletionPopup(true);
-            }}
-          >
-            Close
-          </button>
-        </aside>
-      )}
-
       <main className={styles.main}>
         <header className={styles.header}>
           <p className={styles.kicker}>Rice Interface</p>
@@ -302,14 +306,16 @@ export default function Home() {
                 : "Raspberry Pi is disconnected"}
             </p>
           </div>
-
-          <p className={styles.classificationProgress}>
-            Classified: {classifiedRiceCount} / {counterData.count}
-          </p>
-
-          {isClassificationDone && (
-            <p className={styles.classificationDone}>Classification is done.</p>
-          )}
+          <div className={styles.statusRow}>
+            <span
+              className={`${styles.statusDot} ${
+                showFinished ? styles.stopped : styles.running
+              }`}
+            />
+            <p className={styles.statusText}>
+              {showFinished ? "Not Processing" : "Processing"}
+            </p>
+          </div>
 
           <div className={styles.actionRow}>
             <button
@@ -349,7 +355,9 @@ export default function Home() {
             <p className={styles.connectionWarning}>{cameraControlError}</p>
           )}
 
-          {saveMessage && <p className={styles.connectionWarning}>{saveMessage}</p>}
+          {saveMessage && (
+            <p className={styles.connectionWarning}>{saveMessage}</p>
+          )}
 
           {!isChecking && !isPiConnected && (
             <p className={styles.connectionWarning}>
@@ -367,6 +375,22 @@ export default function Home() {
           ))}
         </section>
       </main>
+
+      {finishedToastVisible && (
+        <div className={styles.toastContainer}>
+          <div className={styles.toastSuccess}>
+            <span className={styles.toastMessage}>Processing done</span>
+            <button
+              type="button"
+              className={styles.toastCloseButton}
+              onClick={() => setFinishedToastVisible(false)}
+              aria-label="Close notification"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

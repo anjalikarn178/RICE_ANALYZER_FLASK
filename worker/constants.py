@@ -9,6 +9,7 @@ PARENT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
 CONFIG_FILE = os.path.join(PARENT_DIR, "cam.json")
 DATA_FILE = os.path.join(PARENT_DIR, "data.json")
+QUEUE_FILE = os.path.join(PARENT_DIR, "queue.json")
 
 CHECK_INTERVAL = 0.5
 
