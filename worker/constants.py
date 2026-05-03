@@ -18,6 +18,5 @@ URL = f"tcp://{PI_IP}:{PORT}"
 CATEGORIES = ["white", "chalky", "broken", "brown", "yellow", "others"]
 
 # Model
-MODEL_PATH = os.path.join(PARENT_DIR, "rice_model.pth")
-CLASSES = ["brown", "chalky", "white", "yellow"]   # must match training order
+RESNET18_CKPT_PATH = os.path.join(PARENT_DIR, "rice_resnet18_new_vids_best.pth")
 BROKEN_AREA_THRESHOLD = 300                         # px² — grains below this are broken

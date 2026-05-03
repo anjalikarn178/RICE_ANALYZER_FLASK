@@ -1,40 +1,35 @@
 """
-Async EfficientNet-B0 classifier.
+Async ResNet18 classifier.
 Runs in a background thread; call enqueue(crop_bgr, area) from any thread.
 """
 
 import os
 import queue
 import threading
+
 import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 from PIL import Image
 from torchvision import models, transforms
-from torchvision.models import EfficientNet_B0_Weights
 
-from constants import MODEL_PATH, CLASSES, BROKEN_AREA_THRESHOLD
 import data_io
+from constants import BROKEN_AREA_THRESHOLD, RESNET18_CKPT_PATH
 
 
-val_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
-
-
-def build_model(num_classes: int) -> nn.Module:
-    model = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
-    for p in model.parameters():
-        p.requires_grad = False
-    in_f = model.classifier[1].in_features
-    model.classifier = nn.Sequential(
-        nn.Dropout(0.3), nn.Linear(in_f, 512),    nn.BatchNorm1d(512),
-        nn.Dropout(0.3), nn.Linear(512, 256),      nn.BatchNorm1d(256),
-        nn.Dropout(0.3), nn.Linear(256, num_classes),
+def _make_val_transform(img_size: int) -> transforms.Compose:
+    return transforms.Compose(
+        [
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
     )
+
+def _build_resnet18(num_classes: int) -> nn.Module:
+    model = models.resnet18(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
 
 
@@ -47,35 +42,53 @@ class AIClassifier:
 
     def __init__(self):
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self._model  = self._load_model()
+        self._model, self._class_names, self._val_transform = self._load_model()
         self._softmax = nn.Softmax(dim=1)
         self._queue  = queue.Queue()
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
-        print(f"[AI] Classifier ready on {self._device}")
+        print(f"[AI] Classifier ready on {self._device} (resnet18)")
 
-    def _load_model(self) -> nn.Module:
-        model = build_model(len(CLASSES)).to(self._device)
-        if os.path.exists(MODEL_PATH):
-            model.load_state_dict(
-                torch.load(MODEL_PATH, map_location=self._device, weights_only=True)
+    def _load_model(self) -> tuple[nn.Module, list[str], transforms.Compose]:
+        if not os.path.exists(RESNET18_CKPT_PATH):
+            raise FileNotFoundError(
+                f"ResNet checkpoint not found at {RESNET18_CKPT_PATH}. "
+                "Copy rice_resnet18_new_vids_best.pth into the app root."
             )
-            print(f"[AI] Loaded weights from {MODEL_PATH}")
-        else:
-            print(f"[AI] WARNING: {MODEL_PATH} not found — using random weights")
+
+        payload = torch.load(str(RESNET18_CKPT_PATH), map_location=self._device)
+        state_dict = payload.get("state_dict")
+        class_names = payload.get("class_names")
+        num_classes = payload.get("num_classes")
+
+        if state_dict is None or class_names is None or num_classes is None:
+            raise ValueError(
+                f"Invalid checkpoint format in {RESNET18_CKPT_PATH}. "
+                "Expected keys: state_dict, class_names, num_classes."
+            )
+
+        class_names = list(class_names)
+        num_classes = int(num_classes)
+
+        model = _build_resnet18(num_classes=num_classes).to(self._device)
+        model.load_state_dict(state_dict)
         model.eval()
-        return model
+        print(f"[AI] Loaded ResNet18 checkpoint from {RESNET18_CKPT_PATH} (classes={class_names})")
+        return model, class_names, _make_val_transform(img_size=128)
 
     def _classify(self, crop_bgr: np.ndarray, area: float) -> str:
         if 0 < area < BROKEN_AREA_THRESHOLD:
             return "broken"
         try:
             rgb    = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-            tensor = val_transform(Image.fromarray(rgb)).unsqueeze(0).to(self._device)
+            tensor = self._val_transform(Image.fromarray(rgb)).unsqueeze(0).to(self._device)
             with torch.no_grad():
                 probs = self._softmax(self._model(tensor)).cpu().numpy()[0]
-            return CLASSES[int(probs.argmax())]
+            idx = int(probs.argmax())
+            if 0 <= idx < len(self._class_names):
+                return self._class_names[idx]
+            return "others"
         except Exception as e:
             print(f"[AI] Inference error: {e}")
             return "others"
