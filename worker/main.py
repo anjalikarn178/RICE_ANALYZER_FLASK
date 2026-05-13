@@ -2,6 +2,8 @@ import time
 import queue
 import threading
 
+import cv2
+
 from constants import *
 from utils import read_config_flag
 from network import ping_pi
@@ -18,6 +20,13 @@ def _processor_loop():
         frame = _frame_queue.get()
         if frame is None:   # sentinel: shut down
             break
+        frame = frame[100:550, :1450]
+        try:
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                print("[INFO] 'q' pressed. Shutting down...")
+                break
+        except Exception as e:
+            print(f"[DISPLAY] Error showing frame: {e}")
         try:
             process(frame)
         except Exception as e:
