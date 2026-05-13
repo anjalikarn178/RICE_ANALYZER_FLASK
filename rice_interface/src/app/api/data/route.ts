@@ -12,9 +12,11 @@ type CounterData = {
   count: number;
   white: number;
   chalky: number;
-  broken: number;
+  broken_25: number;
+  broken_50: number;
   brown: number;
   yellow: number;
+  black: number;
   others: number;
 };
 
@@ -22,9 +24,11 @@ const emptyCounterData: CounterData = {
   count: 0,
   white: 0,
   chalky: 0,
-  broken: 0,
+  broken_25: 0,
+  broken_50: 0,
   brown: 0,
   yellow: 0,
+  black: 0,
   others: 0,
 };
 

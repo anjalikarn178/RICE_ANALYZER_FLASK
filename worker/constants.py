@@ -15,8 +15,9 @@ CHECK_INTERVAL = 0.5
 
 URL = f"tcp://{PI_IP}:{PORT}"
 
-CATEGORIES = ["white", "chalky", "broken", "brown", "yellow", "others"]
+CATEGORIES = ["white", "chalky", "broken_25", "broken_50", "brown", "yellow", "black", "others"]
 
 # Model
 RESNET18_CKPT_PATH = os.path.join(PARENT_DIR, "rice_resnet18_new_vids_best.pth")
-BROKEN_AREA_THRESHOLD = 300                         # px² — grains below this are broken
+BROKEN_25_THRESHOLD = 150                           # px² — grains below this are 25% broken
+BROKEN_50_THRESHOLD = 300                           # px² — grains below this are 50% broken

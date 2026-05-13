@@ -15,7 +15,7 @@ from PIL import Image
 from torchvision import models, transforms
 
 import data_io
-from constants import BROKEN_AREA_THRESHOLD, RESNET18_CKPT_PATH
+from constants import BROKEN_25_THRESHOLD, BROKEN_50_THRESHOLD, RESNET18_CKPT_PATH
 
 
 def _make_val_transform(img_size: int) -> transforms.Compose:
@@ -78,8 +78,10 @@ class AIClassifier:
         return model, class_names, _make_val_transform(img_size=128)
 
     def _classify(self, crop_bgr: np.ndarray, area: float) -> str:
-        if 0 < area < BROKEN_AREA_THRESHOLD:
-            return "broken"
+        if 0 < area < BROKEN_25_THRESHOLD:
+            return "broken_25"
+        if BROKEN_25_THRESHOLD <= area < BROKEN_50_THRESHOLD:
+            return "broken_50"
         try:
             rgb    = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
             tensor = self._val_transform(Image.fromarray(rgb)).unsqueeze(0).to(self._device)

@@ -9,7 +9,9 @@ type CounterKey =
   | "yellow"
   | "white"
   | "brown"
-  | "broken"
+  | "broken_25"
+  | "broken_50"
+  | "black"
   | "others";
 
 type CounterData = Record<CounterKey, number>;
@@ -20,7 +22,9 @@ const counterCards: Array<{ label: string; key: CounterKey }> = [
   { label: "Yellow Rice", key: "yellow" },
   { label: "White Rice", key: "white" },
   { label: "Brown Rice", key: "brown" },
-  { label: "Broken Rice", key: "broken" },
+  { label: "25% Broken", key: "broken_25" },
+  { label: "50% Broken", key: "broken_50" },
+  { label: "Black Rice", key: "black" },
   { label: "Other", key: "others" },
 ];
 
@@ -43,7 +47,9 @@ export default function Home() {
     yellow: 0,
     white: 0,
     brown: 0,
-    broken: 0,
+    broken_25: 0,
+    broken_50: 0,
+    black: 0,
     others: 0,
   });
 
@@ -125,7 +131,9 @@ export default function Home() {
         yellow: Number(data.yellow) || 0,
         white: Number(data.white) || 0,
         brown: Number(data.brown) || 0,
-        broken: Number(data.broken) || 0,
+        broken_25: Number(data.broken_25) || 0,
+        broken_50: Number(data.broken_50) || 0,
+        black: Number(data.black) || 0,
         others: Number(data.others) || 0,
       });
     } catch {
@@ -213,7 +221,9 @@ export default function Home() {
         yellow: Number(data.yellow) || 0,
         white: Number(data.white) || 0,
         brown: Number(data.brown) || 0,
-        broken: Number(data.broken) || 0,
+        broken_25: Number(data.broken_25) || 0,
+        broken_50: Number(data.broken_50) || 0,
+        black: Number(data.black) || 0,
         others: Number(data.others) || 0,
       });
     } catch {
