@@ -15,7 +15,6 @@ except ImportError:
     _HAS_SCIPY = False
 
 
-BROKEN_AREA_THRESHOLD = 300  # px² — grains below this are broken
 
 
 def _make_mask(frame: np.ndarray, mode: str = "auto") -> np.ndarray:
