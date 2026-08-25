@@ -1,12 +1,14 @@
 """
 Grain detection and unique-ID tracking for real-time rice analysis.
-Adapted from count_grains_updated.py (centroid tracking, Hungarian matching).
+Includes GatedVelocityTracker (velocity prediction + probability safety net gating + Hungarian matching),
+Stream background calibration model, and counting zone ROI filtering.
 """
 
 import cv2
 import numpy as np
+import math
 from collections import deque
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 try:
     from scipy.optimize import linear_sum_assignment
@@ -18,8 +20,79 @@ except ImportError:
 BROKEN_AREA_THRESHOLD = 300  # px² — grains below this are broken
 
 
+class BackgroundCalibrator:
+    """
+    Stream-friendly dynamic background modeler & auto-calibrator.
+    Accumulates initial frames to compute median background and percentile threshold (DIFF_THRESHOLD).
+    """
+
+    def __init__(self, background_frames_needed: int = 30, sample_every: int = 5, threshold_margin: int = 5):
+        self.background_frames_needed = background_frames_needed
+        self.sample_every = sample_every
+        self.threshold_margin = threshold_margin
+
+        self.background_frames: list = []
+        self.background: Optional[np.ndarray] = None
+        self.diff_threshold: int = 15
+        self.is_calibrated: bool = False
+
+    def add_frame(self, frame: np.ndarray) -> bool:
+        """Add frame to calibration stack. Returns True when calibration completes."""
+        if self.is_calibrated:
+            return True
+
+        blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+        self.background_frames.append(blurred)
+
+        if len(self.background_frames) >= self.background_frames_needed:
+            self._calibrate()
+            return True
+        return False
+
+    def _calibrate(self):
+        """Compute median background and 99.99th percentile diff threshold."""
+        stack = np.stack(self.background_frames, axis=0)
+        self.background = np.median(stack, axis=0).astype(np.uint8)
+
+        calibration_samples = stack[:: self.sample_every]
+        background_float = self.background.astype(np.float32)
+        samples_float = calibration_samples.astype(np.float32)
+        differences = np.abs(samples_float - background_float)
+        all_diff = differences.ravel()
+
+        p9999 = np.percentile(all_diff, 99.99)
+        self.diff_threshold = max(math.ceil(p9999) + self.threshold_margin, 3)
+        self.is_calibrated = True
+
+        # Clear buffer to save memory
+        self.background_frames.clear()
+        print(f"[BG_MODEL] Calibration ready. Automatic DIFF_THRESHOLD = {self.diff_threshold}")
+
+    def get_mask(self, frame: np.ndarray) -> Optional[np.ndarray]:
+        """Generate binary mask via background subtraction using calibrated threshold."""
+        if not self.is_calibrated or self.background is None:
+            return None
+
+        blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+        diff = cv2.absdiff(blurred, self.background)
+        diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+
+        _, mask = cv2.threshold(diff_gray, self.diff_threshold, 255, cv2.THRESH_BINARY)
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        return mask
+
+    def reset(self):
+        self.background_frames.clear()
+        self.background = None
+        self.diff_threshold = 15
+        self.is_calibrated = False
+
+
 def _make_mask(frame: np.ndarray, mode: str = "auto") -> np.ndarray:
-    """Build a binary mask isolating grain pixels via belt-background subtraction."""
+    """Build a binary mask isolating grain pixels via belt-background subtraction (HSV fallback)."""
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
     if mode in ("auto", "mixed", "universal"):
@@ -52,13 +125,22 @@ def detect_grains(
     min_area: int = 40,
     max_area: int = 5000,
     border_margin: int = 2,
+    top_line_y: Optional[int] = None,
+    bottom_line_y: Optional[int] = None,
+    bg_calibrator: Optional[BackgroundCalibrator] = None,
 ) -> Tuple[list, np.ndarray]:
     """
     Detect grain contours in frame.
     Returns (valid_contours, binary_mask).
-    Filters: area range, border-touching blobs (belt artifacts).
+    Filters: area range, border-touching blobs, and ROI counting zone lines.
     """
-    mask = _make_mask(frame, mode)
+    mask = None
+    if bg_calibrator is not None and bg_calibrator.is_calibrated:
+        mask = bg_calibrator.get_mask(frame)
+
+    if mask is None:
+        mask = _make_mask(frame, mode)
+
     h_f, w_f = frame.shape[:2]
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     valid = []
@@ -66,113 +148,192 @@ def detect_grains(
         area = cv2.contourArea(c)
         if area <= min_area or area >= max_area:
             continue
+
         x, y, w, h = cv2.boundingRect(c)
         if border_margin > 0 and (
             x <= border_margin or y <= border_margin or
             x + w >= w_f - border_margin or y + h >= h_f - border_margin
         ):
             continue
+
+        # Counting Zone ROI Filter (from mask+tracking.py)
+        if top_line_y is not None or bottom_line_y is not None:
+            grain_top = y
+            grain_bottom = y + h
+            if top_line_y is not None and grain_bottom < top_line_y:
+                continue
+            if bottom_line_y is not None and grain_top > bottom_line_y:
+                continue
+
         valid.append(c)
     return valid, mask
 
 
-class UniqueGrainTracker:
+class GatedVelocityTracker:
     """
-    Track grain centroids frame-to-frame, counting each grain exactly once.
-
-    update() returns (total_unique_count, new_detection_indices) where
-    new_detection_indices are indices into the centroids list for grains
-    seen for the first time in this frame.
+    Gated Velocity Tracker from mask+tracking.py:
+    Predicts position using smoothed velocity vectors, applies a probability safety net
+    (gating filter radius), and matches using global Hungarian assignment.
     """
 
-    def __init__(self, max_dist: int = 45, max_missed: int = 3):
-        self.max_dist   = max_dist
+    def __init__(self, max_missed: int = 3, gate_radius: float = 70.0, estimated_speed: float = 145.0):
         self.max_missed = max_missed
-        self._tracks: dict = {}       # id → {"centroid": (x,y), "missed": int}
-        self._grain_areas: dict = {}  # id → max area seen
-        self._nid = 0                 # total unique grains ever assigned
+        self.gate_radius = gate_radius
+        self.estimated_speed = estimated_speed
 
-    def _match_hungarian(self, dets: list):
-        if not self._tracks or not dets:
-            return {}, set()
+        self._nid: int = 0
+        self.objects: Dict[int, Tuple[int, int]] = {}
+        self.velocities: Dict[int, Tuple[int, int]] = {}
+        self.predictions: Dict[int, Tuple[int, int, float]] = {}
+        self.disappeared: Dict[int, int] = {}
+        self._grain_areas: Dict[int, float] = {}
 
-        track_ids = list(self._tracks.keys())
-        cost = np.full((len(track_ids), len(dets)), 1e9, dtype=np.float64)
-        for ti, tid in enumerate(track_ids):
-            tx, ty = self._tracks[tid]["centroid"]
-            for di, (cx, cy) in enumerate(dets):
-                d = ((cx - tx) ** 2 + (cy - ty) ** 2) ** 0.5
-                if d <= self.max_dist:
-                    cost[ti, di] = d
+    def register(self, centroid: Tuple[int, int], area: float = 0.0) -> int:
+        assigned_id = self._nid
+        self.objects[assigned_id] = centroid
+        self.velocities[assigned_id] = (0, int(self.estimated_speed))
+        self.disappeared[assigned_id] = 0
+        self._grain_areas[assigned_id] = area
+        self._nid += 1
+        return assigned_id
 
-        if _HAS_SCIPY:
-            row_ind, col_ind = linear_sum_assignment(cost)
-            matched_t, matched_d = {}, set()
-            for ti, di in zip(row_ind, col_ind):
-                if cost[ti, di] < 1e8:
-                    matched_t[track_ids[ti]] = di
-                    matched_d.add(di)
-            return matched_t, matched_d
-        else:
-            return self._match_greedy(dets)
-
-    def _match_greedy(self, dets: list):
-        matched_t, matched_d = {}, set()
-        pairs = []
-        for tid, t in self._tracks.items():
-            tx, ty = t["centroid"]
-            for di, (cx, cy) in enumerate(dets):
-                d = ((cx - tx) ** 2 + (cy - ty) ** 2) ** 0.5
-                if d <= self.max_dist:
-                    pairs.append((d, tid, di))
-        pairs.sort()
-        for d, tid, di in pairs:
-            if tid not in matched_t and di not in matched_d:
-                matched_t[tid] = di
-                matched_d.add(di)
-        return matched_t, matched_d
+    def deregister(self, objectID: int):
+        if objectID in self.objects:
+            del self.objects[objectID]
+        if objectID in self.velocities:
+            del self.velocities[objectID]
+        if objectID in self.disappeared:
+            del self.disappeared[objectID]
+        if objectID in self.predictions:
+            del self.predictions[objectID]
 
     def update(self, centroids: list, areas: Optional[list] = None) -> Tuple[int, list]:
         """
-        Update tracker with this frame's detections.
+        Update tracker with frame detections.
 
-        Returns
-        -------
-        (total_unique_count, new_detection_indices)
-            new_detection_indices: indices into `centroids` for newly seen grains.
+        Returns:
+            (total_unique_count, new_detection_indices)
         """
-        matched_t, matched_d = self._match_hungarian(centroids)
+        if len(centroids) == 0:
+            for oid in list(self.disappeared.keys()):
+                self.disappeared[oid] += 1
+                if self.disappeared[oid] > self.max_missed:
+                    self.deregister(oid)
+            return self._nid, []
 
-        for tid, di in matched_t.items():
-            self._tracks[tid]["centroid"] = centroids[di]
-            self._tracks[tid]["missed"]   = 0
-            if areas and di < len(areas):
-                self._grain_areas[tid] = max(self._grain_areas.get(tid, 0), areas[di])
-
-        for tid in list(self._tracks):
-            if tid not in matched_t:
-                self._tracks[tid]["missed"] += 1
-
+        input_centroids = np.array(centroids, dtype=np.int32)
         new_det_indices = []
-        for di, c in enumerate(centroids):
-            if di not in matched_d:
-                a = areas[di] if areas and di < len(areas) else 0
-                self._tracks[self._nid] = {"centroid": c, "missed": 0}
-                self._grain_areas[self._nid] = a
-                new_det_indices.append(di)
-                self._nid += 1
 
-        self._tracks = {
-            k: v for k, v in self._tracks.items()
-            if v["missed"] <= self.max_missed
-        }
+        if len(self.objects) == 0:
+            for i, c in enumerate(centroids):
+                a = areas[i] if areas and i < len(areas) else 0.0
+                self.register(c, a)
+                new_det_indices.append(i)
+        else:
+            objectIDs = list(self.objects.keys())
+            predicted_centroids = []
+            self.predictions.clear()
+
+            for oid in objectIDs:
+                cx, cy = self.objects[oid]
+                vx, vy = self.velocities[oid]
+                pred_x = int(cx + vx)
+                pred_y = int(cy + vy)
+                predicted_centroids.append((pred_x, pred_y))
+                self.predictions[oid] = (pred_x, pred_y, self.gate_radius)
+
+            predicted_centroids = np.array(predicted_centroids, dtype=np.float64)
+
+            # Euclidean distance between PREDICTED centroids and NEW detections
+            D = np.linalg.norm(predicted_centroids[:, np.newaxis] - input_centroids, axis=2)
+
+            # Apply Probability Safety Net (Gating Filter)
+            for r in range(len(objectIDs)):
+                for c in range(len(input_centroids)):
+                    if D[r, c] > self.gate_radius:
+                        D[r, c] = 1e6  # Infinite penalty
+
+            # Global Hungarian Matching
+            if _HAS_SCIPY:
+                rows, cols = linear_sum_assignment(D)
+            else:
+                rows, cols = self._greedy_match(D)
+
+            used_rows, used_cols = set(), set()
+
+            for row, col in zip(rows, cols):
+                if row in used_rows or col in used_cols:
+                    continue
+
+                if D[row, col] >= 1e5:  # Rejected gating threshold
+                    continue
+
+                oid = objectIDs[row]
+                new_c = tuple(input_centroids[col])
+                old_c = self.objects[oid]
+
+                # Exponential smoothing of velocity vectors
+                new_vx = new_c[0] - old_c[0]
+                new_vy = new_c[1] - old_c[1]
+
+                prev_vx, prev_vy = self.velocities[oid]
+                smoothed_vx = int(0.3 * prev_vx + 0.7 * new_vx)
+                smoothed_vy = int(0.3 * prev_vy + 0.7 * new_vy)
+
+                self.objects[oid] = new_c
+                self.velocities[oid] = (smoothed_vx, smoothed_vy)
+                self.disappeared[oid] = 0
+                if areas and col < len(areas):
+                    self._grain_areas[oid] = max(self._grain_areas.get(oid, 0.0), areas[col])
+
+                used_rows.add(row)
+                used_cols.add(col)
+
+            # Unmatched existing IDs
+            unused_rows = set(range(0, D.shape[0])).difference(used_rows)
+            for row in unused_rows:
+                oid = objectIDs[row]
+                self.disappeared[oid] += 1
+                if self.disappeared[oid] > self.max_missed:
+                    self.deregister(oid)
+
+            # Unmatched new detections
+            unused_cols = set(range(0, D.shape[1])).difference(used_cols)
+            for col in unused_cols:
+                a = areas[col] if areas and col < len(areas) else 0.0
+                self.register(tuple(input_centroids[col]), a)
+                new_det_indices.append(col)
 
         return self._nid, new_det_indices
 
+    def _greedy_match(self, D: np.ndarray):
+        pairs = []
+        for r in range(D.shape[0]):
+            for c in range(D.shape[1]):
+                if D[r, c] < 1e5:
+                    pairs.append((D[r, c], r, c))
+        pairs.sort()
+        matched_r, matched_c = [], []
+        used_r, used_c = set(), set()
+        for d, r, c in pairs:
+            if r not in used_r and c not in used_c:
+                matched_r.append(r)
+                matched_c.append(c)
+                used_r.add(r)
+                used_c.add(c)
+        return matched_r, matched_c
+
     def reset(self):
-        self._tracks = {}
-        self._grain_areas = {}
+        self.objects.clear()
+        self.velocities.clear()
+        self.predictions.clear()
+        self.disappeared.clear()
+        self._grain_areas.clear()
         self._nid = 0
+
+
+# Alias UniqueGrainTracker to GatedVelocityTracker for full backward compatibility
+UniqueGrainTracker = GatedVelocityTracker
 
 
 class SpikeGuard:
