@@ -331,6 +331,66 @@ Polling behavior:
 - Pi connection check every 1 second (`/api/ping`)
 - Counter polling every 1 second while camera is running (`/api/data`)
 
+## Video File Testing (Temporary)
+
+A parallel, throwaway pipeline that feeds a pre-recorded video into the same
+detection → tracking → classification code used for the live Pi feed. Nothing in the
+live path (`worker/main.py`, `cam.json`, `/api/camera`) is modified.
+
+Start the video worker instead of (not alongside) the live worker:
+
+```bash
+cd worker
+python test_main.py
+```
+
+Then open <http://localhost:3000/test> — reachable from the "Test with a recorded video"
+link on the dashboard. From there you can upload a clip, pick one that was uploaded
+earlier, start/stop the run, and watch an annotated preview frame, the frame progress and
+the live counters.
+
+> Only run one worker at a time. `worker/main.py`, `worker/test_main.py` and
+> `test_video_runner.py` all write to `data.json`, so running them together mixes counts.
+
+The worker refreshes `updated_at` about twice a second even while idle. The page treats a
+status older than 5 seconds as **worker offline**, shows a warning and disables Start —
+otherwise a status file left behind by a stopped worker is indistinguishable from an idle
+one, and Start appears to do nothing.
+
+Each Start writes a fresh `RUN_ID`, which the worker echoes back as `run_id`. The page
+only trusts status carrying the current id, so a `done` left over from a previous run
+cannot cancel the run you just started.
+
+### Files
+
+| Path | Written by | Purpose |
+| --- | --- | --- |
+| `test.json` | UI | Control flags: `RUN`, `VIDEO_PATH`, `REALTIME`, `RUN_ID` |
+| `test_status.json` | worker | `state` (`idle`/`running`/`done`/`stopped`/`error`), `frame`, `total_frames`, `message`, `run_id`, `updated_at` |
+| `test_preview.jpg` | worker | Latest annotated frame (written every 5 frames) |
+| `test_videos/` | UI | Uploaded clips (gitignored) |
+
+`REALTIME: false` (default) runs the video as fast as the machine allows; `true` paces it
+at the clip's own frame rate, closer to the live feed.
+
+### API
+
+| Route | Purpose |
+| --- | --- |
+| `GET/POST /api/test-control` | Read/write `test.json` (`run`, `videoPath`, `realtime`) |
+| `GET /api/test-status` | Worker progress from `test_status.json` |
+| `GET/POST/DELETE /api/test-video` | List, upload (streamed to disk) and delete clips in `test_videos/` |
+| `GET /api/test-preview` | Latest annotated JPEG frame |
+
+Counters, reset and log saving reuse the existing `/api/data` routes, so a finished run can
+be saved to `logs/` exactly like a live run.
+
+The standalone CLI runner `test_video_runner.py` still works for a local OpenCV window:
+
+```bash
+python test_video_runner.py path/to/clip.mp4
+```
+
 ## Troubleshooting
 
 ### Pi always shows disconnected

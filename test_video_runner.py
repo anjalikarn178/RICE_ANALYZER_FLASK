@@ -22,7 +22,7 @@ from worker.processor import process, reset, _tracker, _bg_calibrator, TOP_LINE_
 import worker.data_io
 
 # Default test video path (update this if your video file is located elsewhere)
-DEFAULT_VIDEO_PATH = r"C:\Users\hrith\Downloads\rice final videos\vid_samples-6thAug\1785996249.925419-white1.mp4"
+DEFAULT_VIDEO_PATH = r"/Users/udit/Downloads/vid_samples-6thAug 2/1785995939.9004526-black.mp4"
 
 
 def main():

@@ -4,3 +4,8 @@ node_modules/
 .next/
 __pycache__/
 logs/
+test_videos/*
+!test_videos/.gitkeep
+test_status.json
+test_preview.jpg
+test_*.tmp*

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
 
@@ -289,6 +290,9 @@ export default function Home() {
           <p className={styles.kicker}>Rice Interface</p>
           <h1 className={styles.title}>Flow Control Dashboard</h1>
           <p className={styles.subtitle}>Backend ping check every second.</p>
+          <Link className={styles.testLink} href="/test">
+            Test with a recorded video →
+          </Link>
         </header>
 
         <section className={styles.controlPanel}>

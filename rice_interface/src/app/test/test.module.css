@@ -1,0 +1,212 @@
+/* Temporary video-test space — matches the clay theme of page.module.css. */
+
+.testBadge {
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #8a6320;
+  background: linear-gradient(150deg, #fbf1d8, #f2e2bb);
+  box-shadow:
+    inset 2px 2px 4px rgba(255, 255, 255, 0.8),
+    inset -3px -3px 6px rgba(198, 168, 106, 0.4);
+}
+
+.backLink {
+  width: fit-content;
+  color: #6d5b4b;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(109, 91, 75, 0.35);
+}
+
+.backLink:hover {
+  color: #4a3a2b;
+}
+
+.panelTitle {
+  margin: 0;
+  color: #4a3a2b;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.panelHint {
+  margin: 0;
+  color: #6d5b4b;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.uploadRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.fileInput {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(150, 121, 92, 0.5);
+  background: rgba(255, 255, 255, 0.4);
+  color: #5e4a39;
+  font-size: 0.9rem;
+}
+
+.fileInput::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #efe0cd, #e2d0b8);
+  color: #4a3a2b;
+  font-weight: 700;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(180, 145, 109, 0.2);
+  box-shadow: inset 2px 2px 5px rgba(157, 129, 98, 0.28);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #33aa9b, #2d9d8f);
+  transition: width 0.2s ease;
+}
+
+.videoList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.videoRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 14px;
+  text-align: left;
+  cursor: pointer;
+  background: var(--clay-card-strong, #efe0cd);
+  box-shadow:
+    5px 5px 11px rgba(180, 145, 109, 0.22),
+    -5px -5px 10px rgba(255, 255, 255, 0.6);
+  transition: transform 0.16s ease;
+}
+
+.videoRow:hover {
+  transform: translateY(-1px);
+}
+
+.videoRowSelected {
+  box-shadow:
+    inset 4px 4px 9px rgba(31, 133, 120, 0.24),
+    inset -4px -4px 9px rgba(255, 255, 255, 0.6),
+    0 0 0 2px rgba(45, 157, 143, 0.45);
+}
+
+.videoName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #4a3a2b;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.videoMeta {
+  color: #7a6752;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  font-family: var(--font-geist-mono);
+}
+
+.deleteButton {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 9px;
+  background: rgba(224, 108, 75, 0.16);
+  color: #b44b36;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: rgba(224, 108, 75, 0.28);
+}
+
+.deleteButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.emptyList {
+  margin: 0;
+  color: #7a6752;
+  font-size: 0.9rem;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5e4a39;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.runInfo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 0;
+  color: #6d5b4b;
+  font-size: 0.9rem;
+  font-family: var(--font-geist-mono);
+}
+
+.previewFrame {
+  display: block;
+  width: 100%;
+  border-radius: 18px;
+  background: #2b2119;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    6px 6px 14px rgba(180, 145, 109, 0.22);
+}
+
+.previewPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px dashed rgba(150, 121, 92, 0.45);
+  background: rgba(255, 255, 255, 0.3);
+  color: #7a6752;
+  font-size: 0.92rem;
+  text-align: center;
+  line-height: 1.5;
+}

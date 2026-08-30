@@ -21,3 +21,8 @@ CATEGORIES = ["white", "chalky", "broken", "brown", "yellow", "others"]
 MODEL_PATH = os.path.join(PARENT_DIR, "rice_model.pth")
 CLASSES = ["brown", "chalky", "white", "yellow"]   # must match training order
 BROKEN_AREA_THRESHOLD = 300                         # px² — grains below this are broken
+# ── Video-file test harness (temporary; live pipeline is unaffected) ───────────
+TEST_CONTROL_FILE = os.path.join(PARENT_DIR, "test.json")          # written by UI
+TEST_STATUS_FILE  = os.path.join(PARENT_DIR, "test_status.json")   # written by worker
+TEST_PREVIEW_FILE = os.path.join(PARENT_DIR, "test_preview.jpg")   # written by worker
+TEST_VIDEO_DIR    = os.path.join(PARENT_DIR, "test_videos")        # uploaded videos
