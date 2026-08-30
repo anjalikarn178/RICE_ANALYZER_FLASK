@@ -9,3 +9,7 @@ test_videos/*
 test_status.json
 test_preview.jpg
 test_*.tmp*
+dataset_new/
+models/
+newVids/
+*.zip

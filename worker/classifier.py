@@ -12,29 +12,21 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from torchvision import models, transforms
-from torchvision.models import EfficientNet_B0_Weights
 
 from constants import MODEL_PATH, CLASSES, BROKEN_AREA_THRESHOLD
 import data_io
 
 
 val_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 ])
 
 
 def build_model(num_classes: int) -> nn.Module:
-    model = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
-    for p in model.parameters():
-        p.requires_grad = False
-    in_f = model.classifier[1].in_features
-    model.classifier = nn.Sequential(
-        nn.Dropout(0.3), nn.Linear(in_f, 512),    nn.BatchNorm1d(512),
-        nn.Dropout(0.3), nn.Linear(512, 256),      nn.BatchNorm1d(256),
-        nn.Dropout(0.3), nn.Linear(256, num_classes),
-    )
+    model = models.resnet18(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
 
 
@@ -58,9 +50,11 @@ class AIClassifier:
     def _load_model(self) -> nn.Module:
         model = build_model(len(CLASSES)).to(self._device)
         if os.path.exists(MODEL_PATH):
-            model.load_state_dict(
-                torch.load(MODEL_PATH, map_location=self._device, weights_only=True)
-            )
+            loaded = torch.load(MODEL_PATH, map_location=self._device, weights_only=False)
+            if isinstance(loaded, dict) and "state_dict" in loaded:
+                model.load_state_dict(loaded["state_dict"])
+            else:
+                model.load_state_dict(loaded)
             print(f"[AI] Loaded weights from {MODEL_PATH}")
         else:
             print(f"[AI] WARNING: {MODEL_PATH} not found — using random weights")

@@ -15,11 +15,11 @@ CHECK_INTERVAL = 0.5
 
 URL = f"tcp://{PI_IP}:{PORT}"
 
-CATEGORIES = ["white", "chalky", "broken", "brown", "yellow", "others"]
+CATEGORIES = ["black", "white", "chalky", "broken", "brown", "yellow", "others"]
 
 # Model
 MODEL_PATH = os.path.join(PARENT_DIR, "rice_model.pth")
-CLASSES = ["brown", "chalky", "white", "yellow"]   # must match training order
+CLASSES = ["black", "brown", "chalky", "white", "yellow"]   # must match training order
 BROKEN_AREA_THRESHOLD = 300                         # px² — grains below this are broken
 # ── Video-file test harness (temporary; live pipeline is unaffected) ───────────
 TEST_CONTROL_FILE = os.path.join(PARENT_DIR, "test.json")          # written by UI
