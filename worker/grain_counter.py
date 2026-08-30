@@ -122,7 +122,7 @@ def _make_mask(frame: np.ndarray, mode: str = "auto") -> np.ndarray:
 def detect_grains(
     frame: np.ndarray,
     mode: str = "auto",
-    min_area: int = 40,
+    min_area: int = 300,
     max_area: int = 5000,
     border_margin: int = 2,
     top_line_y: Optional[int] = None,
